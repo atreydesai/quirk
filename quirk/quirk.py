@@ -1,13 +1,10 @@
 from quirk.ts import TimeSeries, Interval
 
+import numpy as np
 from sklearn import metrics
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
-
-def format_datetime(dt):
-    return dt.strftime('%Y-%m-%d %H:%M:%S')
-
 
 class Report:
 
@@ -33,32 +30,38 @@ class Quirk:
 
     def classify(self):
         dp = self.ts.datapoints
-        X, y = [], []
+        feature_cardinality = self._feature_cardinality()
+        rolling_windows = self._rolling_windows()
+
+        X = np.zeros((rolling_windows, feature_cardinality))
+        y = np.zeros((rolling_windows,))
 
         # build training X
-        for i in range(0, len(dp) - self.k + 1):
+        for i in range(rolling_windows):
             window = TimeSeries(dp[i:i + self.k])
 
-            # get feature
-            vector = []
-            for feature in self.features:
-                vector.extend(feature().evaluate(window))
+            # build individual feature vector
+            vector = np.zeros((len(self.features), self.k))
+            for j, feature in enumerate(self.features):
+                vector[j] = feature.evaluate(window)
 
-            X.append(vector)
+            vector = vector.reshape((1, self.k * len(self.features)))
+            vector = vector[~np.isnan(vector)]
+            X[i] = vector
 
         # build training Y
-        for i in range(0, len(dp) - self.k + 1):
+        for i in range(rolling_windows):
             window = TimeSeries(dp[i:i + self.k])
 
             # label training datapoints
-            found = False
+            found = 0
             for wdp in window.datapoints:
                 dt = wdp.index
                 for training_interval in self.training:
                     if training_interval.start <= dt and dt <= training_interval.end:
-                        found = True
+                        found = 1
 
-            y.append(int(found))
+            y[i] = found
 
         # scale data
         scaler = StandardScaler()
@@ -73,17 +76,26 @@ class Quirk:
         # cross-validation
         scores = cross_val_score(model, X, y, cv=10)
 
-        windows = [i for (i, item) in enumerate(predicted) if item == 1]
+        # identify anomalous intervals
         actuals = []
-        for i in range(0, len(dp) - self.k + 1):
-            window = TimeSeries(dp[i:i + self.k])
-            if i in windows:
-                start, end = window.datapoints[0].index, window.datapoints[-1].index
+        for i in range(rolling_windows):
+            if predicted[i]:
+                start, end = dp[i].index, dp[i + self.k - 1].index
                 actuals.append(Interval(start, end))
 
+        # merge overlapping intervals
         merged = self._merge_intervals(actuals)
 
         return Report(X, y, merged)
+
+    def _rolling_windows(self):
+        return len(self.ts.datapoints) - self.k + 1
+
+    def _feature_cardinality(self):
+        features = 0
+        for feature in self.features:
+            features += feature.cardinality(self.k)
+        return features
 
     def _merge_intervals(self, intervals):
         if len(intervals) <= 1:

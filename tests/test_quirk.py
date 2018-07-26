@@ -1,7 +1,7 @@
 import unittest
 
 from quirk.quirk import Quirk
-from quirk.feature import Point
+from quirk.feature import Point, Mean
 from quirk.ts import TimeSeries, parse_training
 
 class TestQuirk(unittest.TestCase):
@@ -11,7 +11,8 @@ class TestQuirk(unittest.TestCase):
         timeseries.import_csv('dataset.csv')
 
         q = Quirk(timeseries, 3)
-        q.add_feature(Point)
+        q.add_feature(Point())
+        q.add_feature(Mean())
 
         training = parse_training('training.csv')
         for item in training:
