@@ -15,6 +15,7 @@ def parse_training(path):
             start = parse_timestamp(start)
             end = parse_timestamp(end)
             training.append(Interval(start, end))
+        f.close()
     except FileNotFoundError:
         return []
 
@@ -68,6 +69,7 @@ class TimeSeries:
                 timestamp = parse_timestamp(index)
                 datapoints.append(Datapoint(timestamp, float(value)))
             self.datapoints = datapoints
+            f.close()
         except:
             return False
         return True
