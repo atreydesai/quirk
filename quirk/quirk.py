@@ -86,7 +86,7 @@ class Quirk:
         # merge overlapping intervals
         merged = self._merge_intervals(actuals)
 
-        return Report(X, y, merged)
+        return Report(self.ts.index(), self.ts.values(), merged)
 
     def _rolling_windows(self):
         return len(self.ts.datapoints) - self.k + 1
